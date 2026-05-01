@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      :root {
+        --bg: #f3f7f3;
+        --ink: #1b2a20;
+        --accent: #215732;
+        --card: #ffffff;
+        --border: #d5e2d8;
+      }
+      body {
+        margin: 0;
+        padding: 20px;
+        background: radial-gradient(circle at 20% 20%, #dcebdc, var(--bg));
+        color: var(--ink);
+        font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", sans-serif;
+      }
+      .container {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 24px;
+      }
+      .controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      button {
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-weight: 700;
+      }
+      .status {
+        font-size: 13px;
+        opacity: 0.9;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        margin-bottom: 10px;
+      }
+      .meta {
+        font-size: 12px;
+        opacity: 0.8;
+        margin-bottom: 8px;
+      }
+      .msg {
+        white-space: pre-wrap;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .label {
+        font-weight: 700;
+        margin-top: 8px;
+      }
+      @media (max-width: 640px) {
+        body {
+          padding: 12px;
+        }
+        h1 {
+          font-size: 20px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>VSCode Copilot Remote Monitor</h1>
+      <div class="controls">
+        <button onclick="sendTrigger()">更新トリガー送信</button>
+        <button onclick="loadLogs()">一覧を再読込</button>
+        <div id="status" class="status"></div>
+      </div>
+      <div id="list"></div>
+    </div>
+
+    <script>
+      function setStatus(text) {
+        document.getElementById('status').textContent = text;
+      }
+
+      function escapeHtml(v) {
+        return String(v || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function renderLogs(logs) {
+        const list = document.getElementById('list');
+        if (!logs || !logs.length) {
+          list.innerHTML = '<div class="card">データがありません</div>';
+          return;
+        }
+
+        list.innerHTML = logs.map((log) => `
+          <div class="card">
+            <div class="meta">${escapeHtml(log.timestamp)} / ${escapeHtml(log.host)} / running=${escapeHtml(log.vscodeRunning)}</div>
+            <div class="label">User</div>
+            <div class="msg">${escapeHtml(log.latestUser)}</div>
+            <div class="label">Assistant</div>
+            <div class="msg">${escapeHtml(log.latestAssistant)}</div>
+            <div class="meta">${escapeHtml(log.sourceLogFile)}</div>
+          </div>
+        `).join('');
+      }
+
+      function loadLogs() {
+        setStatus('読み込み中...');
+        google.script.run
+          .withSuccessHandler((rows) => {
+            renderLogs(rows);
+            setStatus('読込完了: ' + new Date().toLocaleString());
+          })
+          .withFailureHandler((err) => {
+            setStatus('読込失敗: ' + err.message);
+          })
+          .getRecentLogs(30);
+      }
+
+      function sendTrigger() {
+        setStatus('トリガー送信中...');
+        fetch(location.href, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'trigger' })
+        })
+          .then((res) => res.json())
+          .then((data) => {
+            setStatus('送信完了: ' + JSON.stringify(data));
+            loadLogs();
+          })
+          .catch((err) => {
+            setStatus('送信失敗: ' + err.message);
+          });
+      }
+
+      loadLogs();
+    </script>
+  </body>
+</html>
